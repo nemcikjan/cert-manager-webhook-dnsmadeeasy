@@ -20,6 +20,6 @@ docker build --build-arg TEST_ZONE_NAME=<your domain>. -t dnsmadeeasy-webhook dn
 
 Before you can run the test suite, you need to set your `apykey.yaml`with your DNSMadeEasy API key. See [instructions](testdata/dnsmadeeasy/README.md).
 
-## Increment the version
+## Create a new release
 
-Update string in [.version](.version).
+Use the GitHub releases to tag a new version. The workflow should then build and upload a new version matching the tag.

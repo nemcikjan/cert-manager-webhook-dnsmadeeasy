@@ -23,12 +23,6 @@ jobs:
     - name: Checkout
       uses: actions/checkout@v2
 
-    - name: Prepare
-      id: prep
-      run: |
-        VERSION=$(cat .version)
-        echo ::set-output name=version::${VERSION}
-
     - name: Set up QEMU
       uses: docker/setup-qemu-action@v1
       with:
@@ -70,7 +64,6 @@ jobs:
         context: .
         file: ./Dockerfile
         platforms: linux/amd64,linux/arm64
-        push: ${{ github.event_name != 'schedule' }}
+        push: true
         tags: |
-          ghcr.io/${{ github.repository_owner }}/${{ env.REGISTRY_IMAGE }}:latest
-          ghcr.io/${{ github.repository_owner }}/${{ env.REGISTRY_IMAGE }}:v${{ steps.prep.outputs.version }}
+          ghcr.io/${{ github.repository_owner }}/${{ env.REGISTRY_IMAGE }}:dev
