@@ -1,4 +1,4 @@
-name: cert-manager-dnsmadeeasy
+name: dev_builds
 
 on:
   workflow_dispatch:
@@ -13,7 +13,7 @@ on:
   - cron: "0 0 * * 6"
 
 env:
-  REGISTRY_IMAGE: ${{ github.workflow }}
+  REGISTRY_IMAGE: dnsmadeeasy-webhook
 
 jobs:
   build:
