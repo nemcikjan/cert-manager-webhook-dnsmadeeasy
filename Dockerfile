@@ -53,3 +53,5 @@ RUN \
 
 USER kah
 ENTRYPOINT ["/app/webhook"]
+
+LABEL org.opencontainers.image.source https://github.com/k8s-at-home/dnsmadeeasy-webhook
