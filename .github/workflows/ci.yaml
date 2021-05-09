@@ -1,16 +1,24 @@
-name: publish_action
+name: CI
 
 on:
   workflow_dispatch:
   push:
     tags:
     - "v*.*.*"
+    branches:
+    - main
+  pull_request:
+    types:
+    - opened
+    - reopened
+  schedule:
+  - cron: "0 0 * * 6"
 
 env:
-  REGISTRY_IMAGE: ghcr.io/k8s-at-home/dnsmadeeasy-webhook
+  REGISTRY_IMAGE: ghcr.io/${{ github.repository }}
 
 jobs:
-  docker:
+  build:
     runs-on: ubuntu-latest
     if: "!contains(github.event.head_commit.message, '[ci-skip]')"
     steps:
@@ -20,7 +28,7 @@ jobs:
     - name: Prepare
       id: prep
       run: |
-        VERSION=edge
+        VERSION=dev
         if [[ $GITHUB_REF == refs/tags/v* ]]; then
           VERSION=${GITHUB_REF#refs/tags/}
         fi
@@ -33,6 +41,16 @@ jobs:
           TAGS="${TAGS},${REGISTRY_IMAGE}:latest"
         fi
         echo ::set-output name=tags::${TAGS}
+
+        if [ "${{github.event_name}}" == "pull_request" ]; then
+          echo ::set-output name=push::false
+          echo ::set-output name=cache_from::"type=registry,ref=${REGISTRY_IMAGE}:buildcache"
+          echo ::set-output name=cache_to::""
+        else
+          echo ::set-output name=push::true
+          echo ::set-output name=cache_from::"type=registry,ref=${REGISTRY_IMAGE}:buildcache"
+          echo ::set-output name=cache_to::"type=registry,ref=${REGISTRY_IMAGE}:buildcache,mode=max"
+        fi
 
     - name: Set up QEMU
       uses: docker/setup-qemu-action@v1
@@ -47,15 +65,8 @@ jobs:
         version: latest
         driver-opts: image=moby/buildkit:master
 
-    - name: Cache Docker layers
-      uses: actions/cache@v2
-      with:
-        path: /tmp/.buildx-cache
-        key: ${{ runner.os }}-buildx-${{ github.sha }}
-        restore-keys: |
-          ${{ runner.os }}-buildx-
-
     - name: Login to GitHub Container Registry
+      if: github.event_name != 'pull_request'
       uses: docker/login-action@v1
       with:
         registry: ghcr.io
@@ -70,10 +81,10 @@ jobs:
         context: .
         file: ./Dockerfile
         platforms: linux/amd64,linux/arm64
-        push: true
+        push: ${{ steps.prep.outputs.push }}
         tags: ${{ steps.prep.outputs.tags }}
-        cache-from: type=local,src=/tmp/.buildx-cache
-        cache-to: type=local,dest=/tmp/.buildx-cache
+        cache-from: ${{ steps.prep.outputs.cache_from }}
+        cache-to: ${{ steps.prep.outputs.cache_to }}
 
     - name: Image digest
       run: echo ${{ steps.docker_build.outputs.digest }}

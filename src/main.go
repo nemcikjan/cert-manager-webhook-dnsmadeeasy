@@ -1,22 +1,23 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
-  "strings"
+	"strings"
 
+	extAPI "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
-  metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-  extAPI "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
 
 	webhookapi "github.com/jetstack/cert-manager/pkg/acme/webhook/apis/acme/v1alpha1"
 	webhookcmd "github.com/jetstack/cert-manager/pkg/acme/webhook/cmd"
-  certmgrv1 "github.com/jetstack/cert-manager/pkg/apis/meta/v1"
-  "github.com/jetstack/cert-manager/pkg/issuer/acme/dns/util"
+	certmgrv1 "github.com/jetstack/cert-manager/pkg/apis/meta/v1"
+	"github.com/jetstack/cert-manager/pkg/issuer/acme/dns/util"
 
-  "github.com/mhenderson-so/godnsmadeeasy/src/GoDNSMadeEasy"
+	"github.com/mhenderson-so/godnsmadeeasy/src/GoDNSMadeEasy"
 )
 
 const (
@@ -76,11 +77,11 @@ type DNSMadeEasyProviderConfig struct {
 
 	APIKeyRef    certmgrv1.SecretKeySelector `json:"apiKeyRef"`
 	APISecretRef certmgrv1.SecretKeySelector `json:"apiSecretRef"`
-  TTL          *int                        `json:"ttl"`
-  Sandbox      bool                        `json:"sandbox"`
-  //Secrets directly in config - not recomended -> use secrets!
-  APIKey       string `json:"apiKey"`
-  APISecret    string `json:"apiSecret"`
+	TTL          *int                        `json:"ttl"`
+	Sandbox      bool                        `json:"sandbox"`
+	//Secrets directly in config - not recomended -> use secrets!
+	APIKey    string `json:"apiKey"`
+	APISecret string `json:"apiSecret"`
 }
 
 // Name is used as the name for this DNS solver when referencing it on the ACME
@@ -100,49 +101,49 @@ func (c *DNSMadeEasyProviderSolver) Name() string {
 // solver has correctly configured the DNS provider.
 func (c *DNSMadeEasyProviderSolver) Present(ch *webhookapi.ChallengeRequest) error {
 
-  fmt.Printf("\n>>>Present: fqdn:[%s] zone:[%s]\n", ch.ResolvedFQDN, ch.ResolvedZone)
+	fmt.Printf("\n>>>Present: fqdn:[%s] zone:[%s]\n", ch.ResolvedFQDN, ch.ResolvedZone)
 
-  cfg, err := loadConfig(ch.Config)
+	cfg, err := loadConfig(ch.Config)
 	if err != nil {
-    printError(err)
+		printError(err)
 		return err
 	}
-  //fmt.Printf("Decoded configuration %v\n", cfg)
+	//fmt.Printf("Decoded configuration %v\n", cfg)
 
 	client, err := c.getDnsClient(ch, cfg)
-  if err != nil {
-		printError(err)
-    return err
-	}
-
-  domainID, err := getDomainID(client, ch.ResolvedZone)
 	if err != nil {
 		printError(err)
-    return err
+		return err
 	}
 
-  exitingRecord := findTxtRecord(client, domainID, ch.ResolvedZone, ch.ResolvedFQDN)
+	domainID, err := getDomainID(client, ch.ResolvedZone)
+	if err != nil {
+		printError(err)
+		return err
+	}
 
-  if (exitingRecord == nil) {
-    record := newTxtRecord(ch.ResolvedZone, ch.ResolvedFQDN, ch.Key, *cfg.TTL)
-    _, err = client.AddRecord(domainID, record)
-  	if err != nil {
-  		printError(err)
-      return fmt.Errorf("DNSMadeEasy API call failed: %v", err)
-  	}
-  } else {
-    exitingRecord.Value = ch.Key
-    exitingRecord.TTL = *cfg.TTL
+	exitingRecord := findTxtRecord(client, domainID, ch.ResolvedZone, ch.ResolvedFQDN)
 
-    err = client.UpdateRecord(domainID, exitingRecord)
-  	if err != nil {
-      printError(err)
-  		return fmt.Errorf("DNSMadeEasy API call failed: %v", err)
-  	}
-  }
+	if exitingRecord == nil {
+		record := newTxtRecord(ch.ResolvedZone, ch.ResolvedFQDN, ch.Key, *cfg.TTL)
+		_, err = client.AddRecord(domainID, record)
+		if err != nil {
+			printError(err)
+			return fmt.Errorf("DNSMadeEasy API call failed: %v", err)
+		}
+	} else {
+		exitingRecord.Value = ch.Key
+		exitingRecord.TTL = *cfg.TTL
+
+		err = client.UpdateRecord(domainID, exitingRecord)
+		if err != nil {
+			printError(err)
+			return fmt.Errorf("DNSMadeEasy API call failed: %v", err)
+		}
+	}
 
 	fmt.Printf("\n<<<Present: fqdn:[%s] zone:[%s]\n", ch.ResolvedFQDN, ch.ResolvedZone)
-  return nil
+	return nil
 }
 
 // CleanUp should delete the relevant TXT record from the DNS provider console.
@@ -153,37 +154,37 @@ func (c *DNSMadeEasyProviderSolver) Present(ch *webhookapi.ChallengeRequest) err
 // concurrently.
 func (c *DNSMadeEasyProviderSolver) CleanUp(ch *webhookapi.ChallengeRequest) error {
 
-  fmt.Printf("\n>>>CleanUp: fqdn:[%s] zone:[%s]\n", ch.ResolvedFQDN, ch.ResolvedZone)
-  cfg, err := loadConfig(ch.Config)
+	fmt.Printf("\n>>>CleanUp: fqdn:[%s] zone:[%s]\n", ch.ResolvedFQDN, ch.ResolvedZone)
+	cfg, err := loadConfig(ch.Config)
 	if err != nil {
 		printError(err)
-    return err
+		return err
 	}
 
-  client, err := c.getDnsClient(ch, cfg)
-  if err != nil {
-		printError(err)
-    return err
-	}
-
-  fmt.Printf("fqdn:[%s] zone:[%s]\n", ch.ResolvedFQDN, ch.ResolvedZone)
-  domainID, err := getDomainID(client, ch.ResolvedZone)
+	client, err := c.getDnsClient(ch, cfg)
 	if err != nil {
 		printError(err)
-    return err
+		return err
 	}
 
-  exitingRecord := findTxtRecord(client, domainID, ch.ResolvedZone, ch.ResolvedFQDN)
+	fmt.Printf("fqdn:[%s] zone:[%s]\n", ch.ResolvedFQDN, ch.ResolvedZone)
+	domainID, err := getDomainID(client, ch.ResolvedZone)
+	if err != nil {
+		printError(err)
+		return err
+	}
 
-  if (exitingRecord != nil) {
-    err = client.DeleteRecord(domainID, exitingRecord.ID)
-    if err != nil {
-  		printError(err)
-      return fmt.Errorf("DNSMadeEasy API call failed: %v", err)
-  	}
-  }
-  fmt.Printf("\n<<<CleanUp: fqdn:[%s] zone:[%s]\n", ch.ResolvedFQDN, ch.ResolvedZone)
-  return nil
+	exitingRecord := findTxtRecord(client, domainID, ch.ResolvedZone, ch.ResolvedFQDN)
+
+	if exitingRecord != nil {
+		err = client.DeleteRecord(domainID, exitingRecord.ID)
+		if err != nil {
+			printError(err)
+			return fmt.Errorf("DNSMadeEasy API call failed: %v", err)
+		}
+	}
+	fmt.Printf("\n<<<CleanUp: fqdn:[%s] zone:[%s]\n", ch.ResolvedFQDN, ch.ResolvedZone)
+	return nil
 }
 
 // Initialize will be called when the webhook first starts.
@@ -199,7 +200,7 @@ func (c *DNSMadeEasyProviderSolver) Initialize(kubeClientConfig *rest.Config, st
 
 	cl, err := kubernetes.NewForConfig(kubeClientConfig)
 	if err != nil {
-    printError(err)
+		printError(err)
 		return err
 	}
 
@@ -211,7 +212,7 @@ func (c *DNSMadeEasyProviderSolver) Initialize(kubeClientConfig *rest.Config, st
 // loadConfig is a small helper function that decodes JSON configuration into
 // the typed config struct.
 func loadConfig(cfgJSON *extAPI.JSON) (DNSMadeEasyProviderConfig, error) {
-  ttl := defaultTTL
+	ttl := defaultTTL
 	cfg := DNSMadeEasyProviderConfig{TTL: &ttl}
 	// handle the 'base case' where no configuration has been provided
 	if cfgJSON == nil {
@@ -226,57 +227,57 @@ func loadConfig(cfgJSON *extAPI.JSON) (DNSMadeEasyProviderConfig, error) {
 
 func (c *DNSMadeEasyProviderSolver) getDnsClient(ch *webhookapi.ChallengeRequest, cfg DNSMadeEasyProviderConfig) (*GoDNSMadeEasy.GoDMEConfig, error) {
 
-  //API Key
-  apiKey := cfg.APIKey
-  if apiKey == "" {
-    ref := cfg.APIKeyRef
-  	if ref.Key == "" || ref.Name == "" {
-  		return nil, fmt.Errorf("no apiKeyRef for %q in secret '%s/%s'", ref.Name, ref.Key, ch.ResourceNamespace)
-  	}
-  	secret, err := c.client.CoreV1().Secrets(ch.ResourceNamespace).Get(ref.Name, metav1.GetOptions{})
-  	if err != nil {
-  		return nil, err
-  	}
-    apiKeyRef, ok := secret.Data[ref.Key]
-  	if !ok {
-  		return nil, fmt.Errorf("no apiKeyRef for %q in secret '%s/%s'", ref.Name, ref.Key, ch.ResourceNamespace)
-  	}
-  	apiKey = fmt.Sprintf("%s", apiKeyRef)
-  }
+	//API Key
+	apiKey := cfg.APIKey
+	if apiKey == "" {
+		ref := cfg.APIKeyRef
+		if ref.Key == "" || ref.Name == "" {
+			return nil, fmt.Errorf("no apiKeyRef for %q in secret '%s/%s'", ref.Name, ref.Key, ch.ResourceNamespace)
+		}
+		secret, err := c.client.CoreV1().Secrets(ch.ResourceNamespace).Get(context.TODO(), ref.Name, metav1.GetOptions{})
+		if err != nil {
+			return nil, err
+		}
+		apiKeyRef, ok := secret.Data[ref.Key]
+		if !ok {
+			return nil, fmt.Errorf("no apiKeyRef for %q in secret '%s/%s'", ref.Name, ref.Key, ch.ResourceNamespace)
+		}
+		apiKey = fmt.Sprintf("%s", apiKeyRef)
+	}
 
-  //API Secret
-  apiSecret := cfg.APISecret
-  if apiSecret == "" {
-    ref := cfg.APISecretRef
-  	if ref.Key == "" || ref.Name == "" {
-  		return nil, fmt.Errorf("no apiSecretRef for %q in secret '%s/%s'", ref.Name, ref.Key, ch.ResourceNamespace)
-  	}
-    secret, err := c.client.CoreV1().Secrets(ch.ResourceNamespace).Get(ref.Name, metav1.GetOptions{})
-  	if err != nil {
-  		return nil, err
-  	}
-    apiSecretRef, ok := secret.Data[ref.Key]
-  	if !ok {
-  		return nil, fmt.Errorf("no accessKeySecret for %q in secret '%s/%s'", ref.Name, ref.Key, ch.ResourceNamespace)
-  	}
-  	apiSecret = fmt.Sprintf("%s", apiSecretRef)
-  }
+	//API Secret
+	apiSecret := cfg.APISecret
+	if apiSecret == "" {
+		ref := cfg.APISecretRef
+		if ref.Key == "" || ref.Name == "" {
+			return nil, fmt.Errorf("no apiSecretRef for %q in secret '%s/%s'", ref.Name, ref.Key, ch.ResourceNamespace)
+		}
+		secret, err := c.client.CoreV1().Secrets(ch.ResourceNamespace).Get(context.TODO(), ref.Name, metav1.GetOptions{})
+		if err != nil {
+			return nil, err
+		}
+		apiSecretRef, ok := secret.Data[ref.Key]
+		if !ok {
+			return nil, fmt.Errorf("no accessKeySecret for %q in secret '%s/%s'", ref.Name, ref.Key, ch.ResourceNamespace)
+		}
+		apiSecret = fmt.Sprintf("%s", apiSecretRef)
+	}
 
-  APIUrl := GoDNSMadeEasy.LIVEAPI
-  if (cfg.Sandbox) {
-    APIUrl = GoDNSMadeEasy.SANDBOXAPI
-  }
+	APIUrl := GoDNSMadeEasy.LIVEAPI
+	if cfg.Sandbox {
+		APIUrl = GoDNSMadeEasy.SANDBOXAPI
+	}
 
-  //Init client
-  client, err := GoDNSMadeEasy.NewGoDNSMadeEasy(&GoDNSMadeEasy.GoDMEConfig{
-      APIKey:               apiKey,
-      SecretKey:            apiSecret,
-      APIUrl:               APIUrl,
-      DisableSSLValidation: false,
-  })
-  if err != nil {
-      return nil, err
-  }
+	//Init client
+	client, err := GoDNSMadeEasy.NewGoDNSMadeEasy(&GoDNSMadeEasy.GoDMEConfig{
+		APIKey:               apiKey,
+		SecretKey:            apiSecret,
+		APIUrl:               APIUrl,
+		DisableSSLValidation: false,
+	})
+	if err != nil {
+		return nil, err
+	}
 
 	return client, nil
 }
@@ -294,7 +295,7 @@ func getDomainID(client *GoDNSMadeEasy.GoDMEConfig, zone string) (int, error) {
 
 	var hostedDomain GoDNSMadeEasy.Domain
 	for _, domain := range domains {
-    if domain.Name == util.UnFqdn(authZone) {
+		if domain.Name == util.UnFqdn(authZone) {
 			hostedDomain = domain
 			break
 		}
@@ -311,33 +312,32 @@ func newTxtRecord(zone, fqdn, value string, ttl int) *GoDNSMadeEasy.Record {
 	name := extractRecordName(fqdn, zone)
 
 	return &GoDNSMadeEasy.Record{
-		Type:  "TXT",
-		Name:  name,
-		Value: value,
+		Type:        "TXT",
+		Name:        name,
+		Value:       value,
 		GtdLocation: "DEFAULT",
-		TTL:   ttl,
+		TTL:         ttl,
 	}
 }
 
 func findTxtRecord(client *GoDNSMadeEasy.GoDMEConfig, domainID int, zone, fqdn string) *GoDNSMadeEasy.Record {
 
-  name := extractRecordName(fqdn, zone)
+	name := extractRecordName(fqdn, zone)
 
-  records, err := client.Records(domainID)
-  if (err != nil) {
-    return nil
-  }
+	records, err := client.Records(domainID)
+	if err != nil {
+		return nil
+	}
 
-  for _, existingRecord := range records {
-    if existingRecord.Name == name {
-      fmt.Printf("DNS record found: %v\n", existingRecord)
+	for _, existingRecord := range records {
+		if existingRecord.Name == name {
+			fmt.Printf("DNS record found: %v\n", existingRecord)
 			return &existingRecord
 		}
 	}
 
 	return nil
 }
-
 
 func extractRecordName(fqdn, zone string) string {
 	if idx := strings.Index(fqdn, "."+zone); idx != -1 {
@@ -348,5 +348,5 @@ func extractRecordName(fqdn, zone string) string {
 }
 
 func printError(err error) {
-  fmt.Printf("\n\nERROR\n %v \n\n", err)
+	fmt.Printf("\n\nERROR\n %v \n\n", err)
 }
