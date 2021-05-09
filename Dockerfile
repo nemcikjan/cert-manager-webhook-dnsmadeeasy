@@ -1,4 +1,4 @@
-FROM golang:1.15 AS build
+FROM golang:1.16 AS build
 
 WORKDIR /workspace
 ENV GO111MODULE=on
@@ -25,33 +25,13 @@ RUN  \
        CCGO_ENABLED=0 TEST_ZONE_NAME="$TEST_ZONE_NAME" go test -v .; \
      fi
 
-FROM ghcr.io/k8s-at-home/ubuntu:latest
-
+# Use distroless as minimal base image to package the manager binary
+# Refer to https://github.com/GoogleContainerTools/distroless for more details
+FROM gcr.io/distroless/static:nonroot
+WORKDIR /
 COPY --from=build /workspace/src/webhook /app/webhook
+USER nonroot:nonroot
 
-USER root
-RUN \
-  apt-get -qq update \
-  && \
-  apt-get -qq install -y \
-    ca-certificates \
-    bash \
-    curl \
-  && echo "UpdateMethod=docker\nPackageVersion=${VERSION}\nPackageAuthor=[Team k8s-at-home](https://github.com/k8s-at-home)" > /app/package_info \
-  && apt-get remove -y ${EXTRA_INSTALL_ARG} \
-  && apt-get purge -y --auto-remove -o APT::AutoRemove::RecommendsImportant=false \
-  && apt-get autoremove -y \
-  && apt-get clean \
-  && \
-  rm -rf \
-    /tmp/* \
-    /var/lib/apt/lists/* \
-    /var/tmp/ \
-  && chmod -R u=rwX,go=rX /app \
-  && echo umask ${UMASK} >> /etc/bash.bashrc \
-  && update-ca-certificates
-
-USER kah
 ENTRYPOINT ["/app/webhook"]
 
 LABEL org.opencontainers.image.source https://github.com/k8s-at-home/dnsmadeeasy-webhook
