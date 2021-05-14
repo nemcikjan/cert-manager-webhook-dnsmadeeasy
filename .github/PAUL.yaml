@@ -1,9 +1,9 @@
 maintainers:
-- angelnu
 - billimek
 - bjw-s
 - carpenike
 - onedr0p
+- angelnu
 labels: true
 empty_description_check:
   enabled: true
