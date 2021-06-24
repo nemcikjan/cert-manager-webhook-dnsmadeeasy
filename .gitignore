@@ -2,3 +2,4 @@
 *apikey.yaml
 bin
 _out
+apiserver.local.config/**
