@@ -396,6 +396,8 @@ github.com/jetstack/cert-manager v1.4.0 h1:tjQElwmDX2rIp/NmdacyG6dinl+Ot3KJqBMLn
 github.com/jetstack/cert-manager v1.4.0/go.mod h1:ZwlTcZLU4ClMNQ9UVT5m4Uds1Essnus6s/d1+8f6wAw=
 github.com/jetstack/cert-manager v1.4.1 h1:9y+eRbDNXetOfVnMsFqt4IYd2Suf3k499zGtE8oed7s=
 github.com/jetstack/cert-manager v1.4.1/go.mod h1:ZwlTcZLU4ClMNQ9UVT5m4Uds1Essnus6s/d1+8f6wAw=
+github.com/jetstack/cert-manager v1.4.2 h1:WicjKOc6qpBlIFd8fq8trBg4fjJI6UIp1qKhia3Owpw=
+github.com/jetstack/cert-manager v1.4.2/go.mod h1:ZwlTcZLU4ClMNQ9UVT5m4Uds1Essnus6s/d1+8f6wAw=
 github.com/jmespath/go-jmespath v0.0.0-20180206201540-c2b33e8439af/go.mod h1:Nht3zPeWKUH0NzdCt2Blrr5ys8VGpn0CEB0cQHVjt7k=
 github.com/jmespath/go-jmespath v0.4.0/go.mod h1:T8mJZnbsbmF+m6zOOFylbeCJqk5+pHWvzYPziyZiYoo=
 github.com/jmespath/go-jmespath/internal/testify v1.5.1/go.mod h1:L3OGu8Wl2/fWfCI6z80xFu9LTZmf1ZRjMHUOPmWr69U=
