@@ -1,6 +1,7 @@
 
 # Image URL to use all building/pushing image targets
 IMG ?= dnsmadeeasy-webhook:latest
+TEST_ASSET_PATH=../_out/kubebuilder/bin
 
 # Build manager binary
 build: fmt vet
@@ -17,7 +18,10 @@ tidy: download
 # Run tests
 test: fetch_test_binaries
 	echo "Testing with TEST_ZONE_NAME=${TEST_ZONE_NAME}"
-	cd src; go test -v .
+	cd src; \
+	  TEST_ASSET_ETCD=${TEST_ASSET_PATH}/etcd \
+	  TEST_ASSET_KUBE_APISERVER=${TEST_ASSET_PATH}/kube-apiserver \
+	  go test -v .
 
 # Fetch binaries used by test
 fetch_test_binaries: _out/kubebuilder/bin/kube-apiserver

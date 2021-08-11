@@ -21,7 +21,6 @@ func TestRunsSuite(t *testing.T) {
 		dns.SetResolvedZone(zone),
 		dns.SetAllowAmbientCredentials(false),
 		dns.SetManifestPath("../testdata/dnsmadeeasy"),
-		dns.SetBinariesPath("../_out/kubebuilder/bin"),
 		//dns.SetDNSServer("ns1.sandbox.dnsmadeeasy.com:53"),
 	)
 
