@@ -122,7 +122,7 @@ func (c *DNSMadeEasyProviderSolver) Present(ch *webhookapi.ChallengeRequest) err
 		return err
 	}
 
-	exitingRecord := findTxtRecord(client, domainID, ch.ResolvedZone, ch.ResolvedFQDN)
+	exitingRecord := findTxtRecord(client, domainID, ch.ResolvedZone, ch.ResolvedFQDN, ch.Key)
 
 	if exitingRecord == nil {
 		record := newTxtRecord(ch.ResolvedZone, ch.ResolvedFQDN, ch.Key, *cfg.TTL)
@@ -132,7 +132,10 @@ func (c *DNSMadeEasyProviderSolver) Present(ch *webhookapi.ChallengeRequest) err
 			return fmt.Errorf("DNSMadeEasy API call failed: %v", err)
 		}
 	} else {
-		exitingRecord.Value = ch.Key
+		// we are only updating records matching the same key
+		// https://github.com/k8s-at-home/dnsmadeeasy-webhook/pull/46#issuecomment-921858352
+		//exitingRecord.Value = ch.Key
+
 		exitingRecord.TTL = *cfg.TTL
 
 		err = client.UpdateRecord(domainID, exitingRecord)
@@ -174,7 +177,7 @@ func (c *DNSMadeEasyProviderSolver) CleanUp(ch *webhookapi.ChallengeRequest) err
 		return err
 	}
 
-	exitingRecord := findTxtRecord(client, domainID, ch.ResolvedZone, ch.ResolvedFQDN)
+	exitingRecord := findTxtRecord(client, domainID, ch.ResolvedZone, ch.ResolvedFQDN, ch.Key)
 
 	if exitingRecord != nil {
 		err = client.DeleteRecord(domainID, exitingRecord.ID)
@@ -320,7 +323,7 @@ func newTxtRecord(zone, fqdn, value string, ttl int) *GoDNSMadeEasy.Record {
 	}
 }
 
-func findTxtRecord(client *GoDNSMadeEasy.GoDMEConfig, domainID int, zone, fqdn string) *GoDNSMadeEasy.Record {
+func findTxtRecord(client *GoDNSMadeEasy.GoDMEConfig, domainID int, zone, fqdn string, key string) *GoDNSMadeEasy.Record {
 
 	name := extractRecordName(fqdn, zone)
 
@@ -330,7 +333,9 @@ func findTxtRecord(client *GoDNSMadeEasy.GoDMEConfig, domainID int, zone, fqdn s
 	}
 
 	for _, existingRecord := range records {
-		if existingRecord.Name == name && existingRecord.Type == "TXT" {
+		if existingRecord.Name  == name &&
+		   existingRecord.Type  == "TXT" &&
+		   existingRecord.Value == key {
 			fmt.Printf("DNS record found: %v\n", existingRecord)
 			return &existingRecord
 		}
