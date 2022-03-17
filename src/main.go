@@ -116,16 +116,16 @@ func (c *DNSMadeEasyProviderSolver) Present(ch *webhookapi.ChallengeRequest) err
 		return err
 	}
 
-	domainID, err := getDomainID(client, ch.ResolvedZone)
+	domainID, domainName, err := getDomainID(client, ch.ResolvedZone)
 	if err != nil {
 		printError(err)
 		return err
 	}
 
-	exitingRecord := findTxtRecord(client, domainID, ch.ResolvedZone, ch.ResolvedFQDN, ch.Key)
+	exitingRecord := findTxtRecord(client, domainID, domainName, ch.ResolvedFQDN, ch.Key)
 
 	if exitingRecord == nil {
-		record := newTxtRecord(ch.ResolvedZone, ch.ResolvedFQDN, ch.Key, *cfg.TTL)
+		record := newTxtRecord(domainName, ch.ResolvedFQDN, ch.Key, *cfg.TTL)
 		_, err = client.AddRecord(domainID, record)
 		if err != nil {
 			printError(err)
@@ -145,7 +145,7 @@ func (c *DNSMadeEasyProviderSolver) Present(ch *webhookapi.ChallengeRequest) err
 		}
 	}
 
-	fmt.Printf("\n<<<Present: fqdn:[%s] zone:[%s]\n", ch.ResolvedFQDN, ch.ResolvedZone)
+	fmt.Printf("\n<<<Present: fqdn:[%s] zone:[%s]\n", ch.ResolvedFQDN, domainName)
 	return nil
 }
 
@@ -171,13 +171,13 @@ func (c *DNSMadeEasyProviderSolver) CleanUp(ch *webhookapi.ChallengeRequest) err
 	}
 
 	fmt.Printf("fqdn:[%s] zone:[%s]\n", ch.ResolvedFQDN, ch.ResolvedZone)
-	domainID, err := getDomainID(client, ch.ResolvedZone)
+	domainID, domainName, err := getDomainID(client, ch.ResolvedZone)
 	if err != nil {
 		printError(err)
 		return err
 	}
 
-	exitingRecord := findTxtRecord(client, domainID, ch.ResolvedZone, ch.ResolvedFQDN, ch.Key)
+	exitingRecord := findTxtRecord(client, domainID, domainName, ch.ResolvedFQDN, ch.Key)
 
 	if exitingRecord != nil {
 		err = client.DeleteRecord(domainID, exitingRecord.ID)
@@ -186,7 +186,7 @@ func (c *DNSMadeEasyProviderSolver) CleanUp(ch *webhookapi.ChallengeRequest) err
 			return fmt.Errorf("DNSMadeEasy API call failed: %v", err)
 		}
 	}
-	fmt.Printf("\n<<<CleanUp: fqdn:[%s] zone:[%s]\n", ch.ResolvedFQDN, ch.ResolvedZone)
+	fmt.Printf("\n<<<CleanUp: fqdn:[%s] zone:[%s]\n", ch.ResolvedFQDN, domainName)
 	return nil
 }
 
@@ -285,30 +285,29 @@ func (c *DNSMadeEasyProviderSolver) getDnsClient(ch *webhookapi.ChallengeRequest
 	return client, nil
 }
 
-func getDomainID(client *GoDNSMadeEasy.GoDMEConfig, zone string) (int, error) {
+func getDomainID(client *GoDNSMadeEasy.GoDMEConfig, zone string) (int, string, error) {
 	domains, err := client.Domains()
 	if err != nil {
-		return -1, fmt.Errorf("dnspod API call failed: %v", err)
+		return -1, "", fmt.Errorf("dnspod API call failed: %v", err)
 	}
 
-	authZone, err := util.FindZoneByFqdn(zone, util.RecursiveNameservers)
-	if err != nil {
-		return -1, err
-	}
+	var (
+		hostedDomain GoDNSMadeEasy.Domain
+		length       = 0
+	)
 
-	var hostedDomain GoDNSMadeEasy.Domain
 	for _, domain := range domains {
-		if domain.Name == util.UnFqdn(authZone) {
+		if strings.HasSuffix(zone, domain.Name+".") && len(domain.Name) > length {
 			hostedDomain = domain
-			break
+			length = len(domain.Name)
 		}
 	}
 
 	if hostedDomain.ID == 0 {
-		return -1, fmt.Errorf("Zone %s not found in DNSMadeEasy for zone %s", authZone, zone)
+		return -1, "", fmt.Errorf("zone %s not found", zone)
 	}
 
-	return hostedDomain.ID, nil
+	return hostedDomain.ID, hostedDomain.Name, nil
 }
 
 func newTxtRecord(zone, fqdn, value string, ttl int) *GoDNSMadeEasy.Record {
@@ -333,9 +332,9 @@ func findTxtRecord(client *GoDNSMadeEasy.GoDMEConfig, domainID int, zone, fqdn s
 	}
 
 	for _, existingRecord := range records {
-		if existingRecord.Name  == name &&
-		   existingRecord.Type  == "TXT" &&
-		   existingRecord.Value == key {
+		if existingRecord.Name == name &&
+			existingRecord.Type == "TXT" &&
+			(existingRecord.Value == key || existingRecord.Value == fmt.Sprintf("\"%s\"", key)) {
 			fmt.Printf("DNS record found: %v\n", existingRecord)
 			return &existingRecord
 		}
