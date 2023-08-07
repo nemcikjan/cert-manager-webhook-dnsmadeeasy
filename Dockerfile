@@ -1,4 +1,4 @@
-FROM golang:1.17 AS build
+FROM golang:1.19 AS build
 
 WORKDIR /workspace
 ENV GO111MODULE=on
@@ -21,14 +21,14 @@ RUN cd src; CGO_ENABLED=0 go build -o webhook -ldflags '-w -extldflags "-static"
 #Test
 ARG TEST_ZONE_NAME
 RUN  \
-     if [ -n "$TEST_ZONE_NAME" ]; then \
-       cd src; \
-       CCGO_ENABLED=0 \
-	     TEST_ASSET_ETCD=${TEST_ASSET_PATH}/etcd \
-	     TEST_ASSET_KUBE_APISERVER=${TEST_ASSET_PATH}/kube-apiserver \
-       TEST_ZONE_NAME="$TEST_ZONE_NAME" \
-       go test -v .; \
-     fi
+  if [ -n "$TEST_ZONE_NAME" ]; then \
+  cd src; \
+  CCGO_ENABLED=0 \
+  TEST_ASSET_ETCD=${TEST_ASSET_PATH}/etcd \
+  TEST_ASSET_KUBE_APISERVER=${TEST_ASSET_PATH}/kube-apiserver \
+  TEST_ZONE_NAME="$TEST_ZONE_NAME" \
+  go test -v .; \
+  fi
 
 # Use distroless as minimal base image to package the manager binary
 # Refer to https://github.com/GoogleContainerTools/distroless for more details
